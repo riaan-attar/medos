@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, FileUp, MapPin, Minus, Plus, Search, ShoppingCart, Star } from 'lucide-react'
+import { ArrowLeft, Bike, FileUp, LocateFixed, MapPin, Minus, Plus, Search, ShoppingCart, Star, Store } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { api } from '../lib/api'
 import { daysUntil, errMsg, fmtDate, money, num, roleLabel, supplierRole } from '../lib/format'
@@ -8,6 +8,12 @@ import { fmtKm, useLocation } from '../lib/geo'
 import { useAsync } from '../lib/useAsync'
 import { Alert, Badge, Empty, ErrorBox, PageHeader, Rating, Skeleton } from '../components/ui'
 import { useToast } from '../components/Toast'
+
+function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const r = (x: number) => (x * Math.PI) / 180
+  const a = Math.sin(r(lat2 - lat1) / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(r(lng2 - lng1) / 2) ** 2
+  return 6371 * 2 * Math.asin(Math.sqrt(Math.min(1, a)))
+}
 
 // Shared by distributors, retailers and (preset seller) customers: pick a supplier, fill a cart, place the order.
 export default function Marketplace({ presetSeller }: { presetSeller?: string }) {
@@ -28,6 +34,10 @@ export default function Marketplace({ presetSeller }: { presetSeller?: string })
   const fileRef = useRef<HTMLInputElement>(null)
   const prefilled = useRef(false)
   const consumer = profile!.role === 'consumer'
+  const [mode, setMode] = useState<'pickup' | 'delivery'>('pickup')
+  const addrs = useAsync(() => (consumer ? api.addresses() : Promise.resolve([])), [consumer])
+  const [addrId, setAddrId] = useState<string>('')
+  const [custom, setCustom] = useState({ address: '', phone: '', lat: null as number | null, lng: null as number | null })
 
   // ?prefill=medicineId:qty,... (from Reorder suggestions / "Reorder" button)
   useEffect(() => {
@@ -50,16 +60,27 @@ export default function Marketplace({ presetSeller }: { presetSeller?: string })
   const subtotal = lines.reduce((s, c) => s + c.unit_price * cart[c.medicine_id], 0)
   const tax = consumer ? 0 : lines.reduce((s, c) => s + (c.unit_price * cart[c.medicine_id] * c.gst_rate) / 100, 0)
   const needsRx = consumer && lines.some(c => c.requires_rx)
+  const canDeliver = consumer && !!seller?.delivery_enabled
+  const delivering = canDeliver && mode === 'delivery'
+  const fee = delivering ? (seller!.delivery_free_above != null && subtotal >= Number(seller!.delivery_free_above) ? 0 : Number(seller!.delivery_fee)) : 0
+  const saved = addrs.data?.find(a => a.id === addrId) ?? (addrId === '' ? addrs.data?.find(a => a.is_default) ?? addrs.data?.[0] : undefined)
+  const dest = addrId === 'new' || !saved ? custom : { address: saved.address, phone: saved.phone, lat: saved.lat, lng: saved.lng }
+  const distKm = delivering && seller?.lat != null && seller?.lng != null && dest.lat != null && dest.lng != null ? haversine(seller.lat, seller.lng, dest.lat, dest.lng) : null
+  const outOfArea = distKm != null && distKm > Number(seller?.delivery_radius_km ?? 0)
+  const belowMin = delivering && lines.length > 0 && subtotal < Number(seller!.delivery_min_order)
+  const deliveryBlocked = delivering && (!dest.address.trim() || outOfArea || belowMin)
 
   const setQty = (id: string, max: number, n: number) => setCart(c => ({ ...c, [id]: Math.min(max, Math.max(0, n)) }))
 
   async function place() {
     if (!sellerId || lines.length === 0) return
     if (needsRx && !rx) { toast.err('Please attach your prescription'); return }
+    if (deliveryBlocked) { toast.err(outOfArea ? 'This address is outside the delivery area' : belowMin ? `Minimum order for delivery is ₹${seller!.delivery_min_order}` : 'Enter a delivery address'); return }
     setBusy(true)
     try {
       const path = needsRx && rx ? await api.uploadPrescription(session!.user.id, rx) : null
-      const id = await api.placeOrder(sellerId, lines.map(c => ({ medicine_id: c.medicine_id, quantity: cart[c.medicine_id] })), notes, path)
+      const id = await api.placeOrder(sellerId, lines.map(c => ({ medicine_id: c.medicine_id, quantity: cart[c.medicine_id] })), notes, path,
+        delivering ? { address: dest.address.trim(), lat: dest.lat, lng: dest.lng, phone: dest.phone } : null)
       toast.ok('Order placed'); nav(`/orders/${id}`)
     } catch (x) { toast.err(errMsg(x)) } finally { setBusy(false) }
   }
@@ -134,8 +155,38 @@ export default function Marketplace({ presetSeller }: { presetSeller?: string })
               <div className="cart-totals">
                 <div className="row between"><span>Subtotal</span><span>{money(subtotal)}</span></div>
                 {!consumer && <div className="row between muted"><span>GST (est.)</span><span>{money(tax)}</span></div>}
-                <div className="row between total"><span>Total</span><b>{money(subtotal + tax)}</b></div>
+                {delivering && <div className="row between muted"><span>Delivery fee</span><span>{fee > 0 ? money(fee) : 'Free'}</span></div>}
+                <div className="row between total"><span>Total</span><b>{money(subtotal + tax + fee)}</b></div>
               </div>
+              {consumer && (
+                <div className="stack">
+                  <div className="fulfil">
+                    <button type="button" className={mode === 'pickup' ? 'sel' : ''} onClick={() => setMode('pickup')}><b><Store size={14} /> Pick up</b><small>Collect from the pharmacy</small></button>
+                    <button type="button" className={mode === 'delivery' ? 'sel' : ''} disabled={!canDeliver} onClick={() => setMode('delivery')}><b><Bike size={14} /> Home delivery</b>
+                      <small>{canDeliver ? `${Number(seller!.delivery_fee) > 0 ? '₹' + seller!.delivery_fee : 'Free'} · within ${seller!.delivery_radius_km} km` : 'Not offered here'}</small></button>
+                  </div>
+                  {delivering && (
+                    <div className="stack">
+                      {(addrs.data ?? []).map(a => (
+                        <label key={a.id} className={`addr ${(saved?.id === a.id && addrId !== 'new') ? 'sel' : ''}`}><input type="radio" name="addr" checked={saved?.id === a.id && addrId !== 'new'} onChange={() => setAddrId(a.id)} />
+                          <span><b>{a.label}</b><div className="muted small">{a.address}</div></span></label>
+                      ))}
+                      <label className={`addr ${addrId === 'new' || !saved ? 'sel' : ''}`}><input type="radio" name="addr" checked={addrId === 'new' || !saved} onChange={() => setAddrId('new')} /><span><b>Deliver somewhere else</b></span></label>
+                      {(addrId === 'new' || !saved) && (
+                        <div className="stack">
+                          <textarea rows={2} placeholder="Full delivery address" value={custom.address} onChange={e => setCustom({ ...custom, address: e.target.value })} />
+                          <input placeholder="Phone for the delivery person" value={custom.phone} onChange={e => setCustom({ ...custom, phone: e.target.value })} />
+                          <button type="button" className="btn sm" onClick={() => navigator.geolocation?.getCurrentPosition(g => setCustom(c => ({ ...c, lat: g.coords.latitude, lng: g.coords.longitude })), () => toast.err('Could not get your location'), { timeout: 10000 })}>
+                            <LocateFixed size={14} /> {custom.lat != null ? 'Location pinned ✓' : 'Pin my current location'}</button>
+                        </div>
+                      )}
+                      {distKm != null && !outOfArea && <div className="muted small"><MapPin size={12} /> {distKm.toFixed(1)} km from the pharmacy</div>}
+                      {outOfArea && <Alert tone="err">This address is {distKm!.toFixed(1)} km away — outside the {seller!.delivery_radius_km} km delivery area.</Alert>}
+                      {belowMin && <Alert tone="warn">Add ₹{(Number(seller!.delivery_min_order) - subtotal).toFixed(0)} more to qualify for delivery (minimum ₹{seller!.delivery_min_order}).</Alert>}
+                    </div>
+                  )}
+                </div>
+              )}
               {needsRx && (
                 <div className="rx-box">
                   <div className="row gap"><Star size={14} /> <b>Prescription required</b></div>
@@ -144,7 +195,7 @@ export default function Marketplace({ presetSeller }: { presetSeller?: string })
                 </div>
               )}
               <textarea rows={2} placeholder={consumer ? 'Pickup time or notes (optional)' : 'Notes for the seller (optional)'} value={notes} onChange={e => setNotes(e.target.value)} />
-              <button className="btn primary block lg" disabled={busy} onClick={place}>{busy ? 'Placing…' : consumer ? 'Reserve now' : 'Place order'}</button>
+              <button className="btn primary block lg" disabled={busy || deliveryBlocked} onClick={place}>{busy ? 'Placing…' : consumer ? (delivering ? 'Order for delivery' : 'Reserve now') : 'Place order'}</button>
             </>}
           </aside>
         </div>

@@ -6,13 +6,16 @@ import { errMsg, roleLabel } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { useTheme, type Theme } from '../lib/theme'
 import { GST_STATES } from '../lib/gst'
+import MapView from '../components/MapView'
+import { Pencil, Star } from 'lucide-react'
+import type { CustomerAddress } from '../lib/types'
 import { Alert, Badge, ErrorBox, Field, Modal, PageHeader, Skeleton, Tabs } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import { fmtDate } from '../lib/format'
 import type { OrgInvite, TeamMember } from '../lib/types'
 import { useToast } from '../components/Toast'
 
-type Tab = 'profile' | 'location' | 'team' | 'security' | 'appearance'
+type Tab = 'profile' | 'location' | 'addresses' | 'team' | 'security' | 'appearance'
 
 export default function Settings() {
   const { profile, session, userProfile, isStaff, memberRole, can, refreshProfile } = useAuth()
@@ -24,6 +27,7 @@ export default function Settings() {
   const [tab, setTab] = useState<Tab>('profile')
   const [f, setF] = useState({ full_name: p.full_name, org_name: p.org_name, phone: p.phone, city: p.city, address: p.address, license_no: p.license_no, gstin: p.gstin, about: p.about, state_code: p.state_code })
   const [pos, setPos] = useState({ lat: p.lat != null ? String(p.lat) : '', lng: p.lng != null ? String(p.lng) : '' })
+  const [dv, setDv] = useState({ delivery_enabled: p.delivery_enabled, delivery_radius_km: String(p.delivery_radius_km), delivery_fee: String(p.delivery_fee), delivery_min_order: String(p.delivery_min_order), delivery_free_above: p.delivery_free_above == null ? '' : String(p.delivery_free_above) })
   const [pw, setPw] = useState({ a: '', b: '' })
   const [busy, setBusy] = useState(false)
   const { theme, set } = useTheme()
@@ -36,7 +40,8 @@ export default function Settings() {
   async function savePos(e: FormEvent) {
     e.preventDefault(); setBusy(true)
     try {
-      await api.updateProfile(p.id, { lat: pos.lat === '' ? null : Number(pos.lat), lng: pos.lng === '' ? null : Number(pos.lng) })
+      await api.updateProfile(p.id, { lat: pos.lat === '' ? null : Number(pos.lat), lng: pos.lng === '' ? null : Number(pos.lng),
+        ...(p.role === 'retailer' ? { delivery_enabled: dv.delivery_enabled, delivery_radius_km: Number(dv.delivery_radius_km) || 3, delivery_fee: Number(dv.delivery_fee) || 0, delivery_min_order: Number(dv.delivery_min_order) || 0, delivery_free_above: dv.delivery_free_above === '' ? null : Number(dv.delivery_free_above) } : {}) })
       await refreshProfile(); toast.ok('Location saved')
     } catch (x) { toast.err(errMsg(x)) } finally { setBusy(false) }
   }
@@ -59,7 +64,7 @@ export default function Settings() {
   return (
     <>
       <PageHeader title="Settings" subtitle={session?.user.email} actions={<>{isStaff && <Badge tone="neutral">{memberRole} at {p.org_name}</Badge>}<Badge tone="info">{roleLabel[p.role]}</Badge>{business && (p.verified ? <Badge tone="good">verified</Badge> : <Badge tone="warn">awaiting verification</Badge>)}</>} />
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'profile', label: isStaff ? 'Business' : 'Profile' }, ...(p.role !== 'admin' ? [{ id: 'location' as const, label: 'Location' }] : []), ...(business && can('team') ? [{ id: 'team' as const, label: 'Team' }] : []), { id: 'security', label: 'Security' }, { id: 'appearance', label: 'Appearance' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'profile', label: isStaff ? 'Business' : 'Profile' }, ...(p.role !== 'admin' ? [{ id: 'location' as const, label: p.role === 'consumer' ? 'My location' : 'Location & delivery' }] : []), ...(p.role === 'consumer' ? [{ id: 'addresses' as const, label: 'Addresses' }] : []), ...(business && can('team') ? [{ id: 'team' as const, label: 'Team' }] : []), { id: 'security', label: 'Security' }, { id: 'appearance', label: 'Appearance' }]} />
 
       {tab === 'profile' && (
         <form className="card narrow-lg stack" onSubmit={save}>
@@ -83,16 +88,34 @@ export default function Settings() {
 
       {tab === 'location' && (
         <form className="card narrow-lg stack" onSubmit={savePos}>
-          {p.role === 'retailer' || p.role === 'distributor' || p.role === 'manufacturer'
-            ? <Alert tone="info">Customers sort pharmacies by distance. Set your shop location so they can find you.</Alert>
-            : <Alert tone="info">Your coordinates are only used if you choose to share them.</Alert>}
+          <Alert tone="info">{p.role === 'consumer' ? 'Your location is only used to sort pharmacies by distance.' : 'Click the map to place your shop. Customers sort pharmacies by distance and delivery radius uses this point.'}</Alert>
+          <MapView height={300} pick={{ lat: pos.lat === '' ? null : Number(pos.lat), lng: pos.lng === '' ? null : Number(pos.lng), onChange: (lat, lng) => setPos({ lat: lat.toFixed(6), lng: lng.toFixed(6) }) }}
+            radiusKm={p.role === 'retailer' && dv.delivery_enabled && pos.lat !== '' ? Number(dv.delivery_radius_km) || null : null} points={pos.lat !== '' && pos.lng !== '' ? [{ id: 'me', lat: Number(pos.lat), lng: Number(pos.lng), title: p.org_name || 'You' }] : []} />
           <div className="grid2">
             <Field label="Latitude"><input type="number" step="any" min="-90" max="90" value={pos.lat} onChange={e => setPos({ ...pos, lat: e.target.value })} /></Field>
             <Field label="Longitude"><input type="number" step="any" min="-180" max="180" value={pos.lng} onChange={e => setPos({ ...pos, lng: e.target.value })} /></Field>
           </div>
-          <div className="row gap"><button type="button" className="btn" onClick={detect}><LocateFixed size={16} /> Use my current location</button><button className="btn primary" disabled={busy || !canEditOrg}>Save location</button></div>
+          <button type="button" className="btn" onClick={detect}><LocateFixed size={16} /> Use my current location</button>
+          {p.role === 'retailer' && (
+            <fieldset className="stack">
+              <h2>Home delivery</h2>
+              <label className="check"><input type="checkbox" checked={dv.delivery_enabled} onChange={e => setDv({ ...dv, delivery_enabled: e.target.checked })} /> Offer home delivery to customers</label>
+              {dv.delivery_enabled && (
+                <div className="grid2">
+                  <Field label="Delivery radius (km)"><input type="number" min="0.5" step="0.5" value={dv.delivery_radius_km} onChange={e => setDv({ ...dv, delivery_radius_km: e.target.value })} /></Field>
+                  <Field label="Delivery fee (₹)"><input type="number" min="0" step="1" value={dv.delivery_fee} onChange={e => setDv({ ...dv, delivery_fee: e.target.value })} /></Field>
+                  <Field label="Minimum order (₹)"><input type="number" min="0" step="1" value={dv.delivery_min_order} onChange={e => setDv({ ...dv, delivery_min_order: e.target.value })} /></Field>
+                  <Field label="Free delivery above (₹)" hint="Leave blank to always charge the fee"><input type="number" min="0" step="1" value={dv.delivery_free_above} onChange={e => setDv({ ...dv, delivery_free_above: e.target.value })} /></Field>
+                </div>
+              )}
+              {dv.delivery_enabled && pos.lat === '' && <Alert tone="warn">Set your shop location so the delivery radius can be enforced.</Alert>}
+            </fieldset>
+          )}
+          <button className="btn primary" disabled={busy || !canEditOrg}>Save</button>
         </form>
       )}
+
+      {tab === 'addresses' && <AddressesTab />}
 
       {tab === 'security' && (
         <form className="card narrow-lg stack" onSubmit={changePw}>
@@ -195,5 +218,47 @@ function TeamTab() {
         </Modal>
       )}
     </div>
+  )
+}
+
+function AddressesTab() {
+  const { profile } = useAuth()
+  const toast = useToast()
+  const { data, error, loading, reload } = useAsync(() => api.addresses(), [])
+  const blank: Partial<CustomerAddress> = { label: 'Home', address: '', phone: '', lat: null, lng: null, is_default: false }
+  const [edit, setEdit] = useState<Partial<CustomerAddress> | null>(null)
+  const [busy, setBusy] = useState(false)
+  async function save(e: FormEvent) {
+    e.preventDefault(); if (!edit) return; setBusy(true)
+    try { await api.saveAddress(profile!.id, { ...edit, is_default: edit.is_default || (data?.length ?? 0) === 0 }); toast.ok('Address saved'); setEdit(null); reload() } catch (x) { toast.err(errMsg(x)) } finally { setBusy(false) }
+  }
+  return (
+    <section className="card narrow-lg stack">
+      <div className="row between"><h2>Delivery addresses</h2><button className="btn primary" onClick={() => setEdit(blank)}>Add address</button></div>
+      {loading && !data && <Skeleton rows={2} />}
+      {error && <ErrorBox message={error} onRetry={reload} />}
+      {data?.length === 0 && <p className="muted">No saved addresses yet. Add one to check out faster.</p>}
+      <ul className="plain">{data?.map(a => (
+        <li key={a.id} className="row between wrap">
+          <span><b>{a.label}</b> {a.is_default && <Badge tone="good"><Star size={11} /> default</Badge>}<div className="muted small">{a.address}{a.phone && ` · ${a.phone}`}{a.lat != null && ' · pinned'}</div></span>
+          <span className="row gap"><button className="btn ghost sm" onClick={() => setEdit(a)}><Pencil size={14} /> Edit</button>
+            <button className="icon-btn" aria-label="Delete address" onClick={async () => { await api.deleteAddress(a.id); reload() }}><Trash2 size={15} /></button></span>
+        </li>))}</ul>
+      {edit && (
+        <Modal title={edit.id ? 'Edit address' : 'New address'} onClose={() => setEdit(null)} wide>
+          <form className="stack" onSubmit={save}>
+            <div className="grid2">
+              <Field label="Label"><input value={edit.label ?? ''} onChange={e => setEdit({ ...edit, label: e.target.value })} placeholder="Home, Office…" /></Field>
+              <Field label="Phone for the delivery person"><input value={edit.phone ?? ''} onChange={e => setEdit({ ...edit, phone: e.target.value })} /></Field>
+            </div>
+            <Field label="Full address"><textarea rows={2} required value={edit.address ?? ''} onChange={e => setEdit({ ...edit, address: e.target.value })} /></Field>
+            <p className="muted small">Click the map to pin your location — pharmacies use it to check you're inside their delivery area.</p>
+            <MapView height={240} pick={{ lat: edit.lat ?? null, lng: edit.lng ?? null, onChange: (lat, lng) => setEdit({ ...edit, lat, lng }) }} />
+            <label className="check"><input type="checkbox" checked={!!edit.is_default} onChange={e => setEdit({ ...edit, is_default: e.target.checked })} /> Use as default address</label>
+            <div className="row gap end"><button type="button" className="btn ghost" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" disabled={busy}>Save address</button></div>
+          </form>
+        </Modal>
+      )}
+    </section>
   )
 }

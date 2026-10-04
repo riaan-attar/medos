@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 import { api } from '../lib/api'
 import { fmtDateTime, money } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
-import { ErrorBox, PageHeader, Skeleton, StatusBadge, Tabs } from '../components/ui'
+import { Badge, ErrorBox, PageHeader, Skeleton, StatusBadge, Tabs } from '../components/ui'
 import DataTable, { type Column } from '../components/DataTable'
 import type { Order } from '../lib/types'
 
@@ -25,7 +25,7 @@ export default function Orders() {
   const pendingIn = all.filter(o => o.seller_id === uid && o.status === 'pending').length
 
   const cols: Column<Order>[] = [
-    { key: 'order_no', header: 'Order', render: o => <b>{o.order_no}</b> },
+    { key: 'order_no', header: 'Order', render: o => <><b>{o.order_no}</b>{o.fulfilment === 'delivery' && <> <Badge tone="info">delivery</Badge></>}</> },
     { key: 'party', header: tab === 'in' ? 'Customer' : 'Supplier', value: o => (tab === 'in' ? o.buyer : o.seller)?.org_name || (tab === 'in' ? o.buyer : o.seller)?.full_name || '',
       render: o => { const p = tab === 'in' ? o.buyer : o.seller; return <>{p?.org_name || p?.full_name || '—'}<div className="muted small">{p?.city}</div></> } },
     { key: 'created_at', header: 'Placed', render: o => fmtDateTime(o.created_at) },

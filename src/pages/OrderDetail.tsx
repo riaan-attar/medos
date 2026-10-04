@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, Check, CheckCircle2, CreditCard, FileText, FileUp, MessageSquare, PackageCheck, Printer, RotateCcw, Send, Star, Truck, X,
+  ArrowLeft, Bike, Check, CheckCircle2, CreditCard, FileText, FileUp, MessageSquare, PackageCheck, Printer, RotateCcw, Send, Star, Truck, X,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { api } from '../lib/api'
@@ -15,7 +15,7 @@ import type { OrderBundle, OrderStatus } from '../lib/types'
 const STEPS: OrderStatus[] = ['pending', 'accepted', 'shipped', 'delivered']
 const EVENT_LABEL: Record<string, string> = {
   placed: 'Order placed', accepted: 'Accepted — stock reserved', rejected: 'Rejected', cancelled: 'Cancelled', shipped: 'Shipment dispatched',
-  handed_over: 'Handed over to customer', received: 'Received', closed_short: 'Closed short', payment: 'Payment recorded',
+  handed_over: 'Handed over / delivered to customer', received: 'Received', closed_short: 'Closed short', payment: 'Payment recorded',
   return_requested: 'Return requested', return_approved: 'Return approved', return_rejected: 'Return rejected',
 }
 
@@ -89,6 +89,14 @@ export default function OrderDetail() {
               <b>{o.buyer?.org_name || o.buyer?.full_name}</b><p className="muted">{o.buyer?.city}</p></section>
           </div>
 
+          {o.fulfilment === 'delivery' && (
+            <section className="card">
+              <div className="doc-label"><Bike size={12} /> Home delivery</div>
+              <b>{o.delivery_address}</b>
+              <div className="muted small">{o.delivery_phone && `Phone: ${o.delivery_phone} · `}Delivery fee {Number(o.delivery_fee) > 0 ? money(o.delivery_fee) : 'free'}
+                {o.delivery_lat != null && o.delivery_lng != null && <> · <a href={`https://www.openstreetmap.org/?mlat=${o.delivery_lat}&mlon=${o.delivery_lng}#map=17/${o.delivery_lat}/${o.delivery_lng}`} target="_blank" rel="noreferrer">view on map</a></>}</div>
+            </section>
+          )}
           {o.prescription_path && <PrescriptionLink path={o.prescription_path} />}
 
           <section className="card">
@@ -155,7 +163,7 @@ export default function OrderDetail() {
           )}
 
           <ActionBar
-            isSeller={isSeller} isBuyer={isBuyer} o={o} toConsumer={toConsumer} remaining={remaining} unreceived={unreceived.length} busy={busy}
+            isSeller={isSeller} isBuyer={isBuyer} o={o} toConsumer={toConsumer} delivery={o.fulfilment === 'delivery'} remaining={remaining} unreceived={unreceived.length} busy={busy}
             canReturn={isBuyer && !toConsumer && received} onDialog={setDialog}
             onAccept={() => run(() => api.advanceOrder(o.id, 'accept'), 'Order accepted — stock reserved')}
             onReceiveAll={() => run(() => api.advanceOrder(o.id, 'receive'), 'Received — stock added')}
@@ -189,8 +197,8 @@ export default function OrderDetail() {
   )
 }
 
-function ActionBar({ isSeller, isBuyer, o, toConsumer, remaining, unreceived, busy, canReturn, onDialog, onAccept, onReceiveAll }: {
-  isSeller: boolean; isBuyer: boolean; o: OrderBundle['order']; toConsumer: boolean; remaining: number; unreceived: number
+function ActionBar({ isSeller, isBuyer, o, toConsumer, delivery, remaining, unreceived, busy, canReturn, onDialog, onAccept, onReceiveAll }: {
+  isSeller: boolean; isBuyer: boolean; o: OrderBundle['order']; toConsumer: boolean; delivery: boolean; remaining: number; unreceived: number
   busy: boolean; canReturn: boolean; onDialog: (d: Dialog) => void; onAccept: () => void; onReceiveAll: () => void
 }) {
   const btns: React.ReactNode[] = []
@@ -199,7 +207,7 @@ function ActionBar({ isSeller, isBuyer, o, toConsumer, remaining, unreceived, bu
     btns.push(<button key="r" className="btn danger" disabled={busy} onClick={() => onDialog('reject')}><X size={16} /> Reject</button>)
   }
   if (isSeller && (o.status === 'accepted' || o.status === 'partially_shipped') && remaining > 0) {
-    btns.push(<button key="s" className="btn primary" disabled={busy} onClick={() => onDialog('ship')}><Truck size={16} /> {toConsumer ? 'Hand over to customer' : o.status === 'partially_shipped' ? 'Ship more' : 'Ship order'}</button>)
+    btns.push(<button key="s" className="btn primary" disabled={busy} onClick={() => onDialog('ship')}><Truck size={16} /> {toConsumer ? (delivery ? 'Mark as delivered' : 'Hand over to customer') : o.status === 'partially_shipped' ? 'Ship more' : 'Ship order'}</button>)
   }
   if (isSeller && o.status === 'partially_shipped') btns.push(<button key="c" className="btn" disabled={busy} onClick={() => onDialog('close')}>Close short</button>)
   if (isBuyer && unreceived > 1 && !toConsumer) btns.push(<button key="ra" className="btn primary" disabled={busy} onClick={onReceiveAll}><PackageCheck size={16} /> Receive all shipments</button>)
@@ -305,7 +313,7 @@ function ShipDialog({ b, onClose, onSubmit }: { b: OrderBundle; onClose: () => v
   const [trk, setTrk] = useState('')
   const partial = items.some(i => q[i.id] < i.quantity - i.shipped_qty)
   return (
-    <Modal title={toConsumer ? 'Hand over to customer' : 'Dispatch shipment'} onClose={onClose} wide>
+    <Modal title={toConsumer ? (b.order.fulfilment === 'delivery' ? 'Mark as delivered' : 'Hand over to customer') : 'Dispatch shipment'} onClose={onClose} wide>
       <form className="stack" onSubmit={e => { e.preventDefault(); onSubmit(toConsumer ? null : q, eta || null, trk) }}>
         <p className="muted">Stock is taken automatically from the earliest-expiry reserved batches.{!toConsumer && ' Reduce a quantity to ship in parts.'}</p>
         <div className="table-wrap flat"><table>
@@ -320,7 +328,7 @@ function ShipDialog({ b, onClose, onSubmit }: { b: OrderBundle; onClose: () => v
           <Field label="Tracking / transporter note"><input value={trk} onChange={e => setTrk(e.target.value)} placeholder="e.g. Blue Dart AWB 123456" /></Field>
         </div>}
         {partial && <Alert tone="info">Partial shipment — the order stays open until the rest ships or you close it short.</Alert>}
-        <div className="row gap end"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary"><Truck size={16} /> {toConsumer ? 'Hand over' : 'Dispatch'}</button></div>
+        <div className="row gap end"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary"><Truck size={16} /> {toConsumer ? (b.order.fulfilment === 'delivery' ? 'Delivered' : 'Hand over') : 'Dispatch'}</button></div>
       </form>
     </Modal>
   )

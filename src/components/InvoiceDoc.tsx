@@ -61,6 +61,7 @@ export default function InvoiceDoc({ bundle, mode }: { bundle: OrderBundle; mode
               {gst && inv.tax_breakup?.map(b => <div key={b.rate} className="muted small"><span>GST @ {b.rate}% on {money(b.taxable)}</span><span>{money(b.tax)}</span></div>)}
               {gst && Number(inv.cgst) > 0 && <><div><span>CGST</span><span>{money(inv.cgst)}</span></div><div><span>SGST</span><span>{money(inv.sgst)}</span></div></>}
               {gst && Number(inv.igst) > 0 && <div><span>IGST</span><span>{money(inv.igst)}</span></div>}
+              {Number(inv.delivery_fee) > 0 && <div><span>Delivery charge</span><span>{money(inv.delivery_fee)}</span></div>}
               <div className="grand"><span>Total</span><span>{money(inv.total)}</span></div>
               {inv.credit_total > 0 && <div><span>Credit notes</span><span>− {money(inv.credit_total)}</span></div>}
               {inv.paid_total > 0 && <div><span>Paid</span><span>− {money(inv.paid_total)}</span></div>}

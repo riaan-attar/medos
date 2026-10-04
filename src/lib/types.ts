@@ -24,6 +24,11 @@ export interface Profile {
   state: string
   state_code: string
   accepted_terms_at: string | null
+  delivery_enabled: boolean
+  delivery_radius_km: number
+  delivery_fee: number
+  delivery_min_order: number
+  delivery_free_above: number | null
   created_at: string
 }
 
@@ -106,6 +111,12 @@ export interface Order {
   status_note: string
   total: number
   prescription_path: string | null
+  fulfilment: 'pickup' | 'delivery'
+  delivery_address: string
+  delivery_lat: number | null
+  delivery_lng: number | null
+  delivery_phone: string
+  delivery_fee: number
   created_at: string
   shipped_at: string | null
   delivered_at: string | null
@@ -152,6 +163,13 @@ export interface Supplier {
   rating_avg: number | null
   rating_count: number
   is_favorite: boolean
+  lat: number | null
+  lng: number | null
+  delivery_enabled: boolean
+  delivery_fee: number
+  delivery_min_order: number
+  delivery_radius_km: number
+  delivery_free_above: number | null
 }
 
 export interface CatalogItem {
@@ -189,6 +207,11 @@ export interface AvailabilityRow {
   distance_km: number | null
   rating_avg: number | null
   rating_count: number
+  lat: number | null
+  lng: number | null
+  delivery_enabled: boolean
+  delivery_fee: number
+  delivery_min_order: number
 }
 
 export interface DashboardStats {
@@ -276,6 +299,7 @@ export interface Invoice {
   cgst: number
   sgst: number
   igst: number
+  delivery_fee: number
   place_of_supply: string
   tax_breakup: { rate: number; taxable: number; tax: number }[]
   due_date: string
@@ -419,6 +443,11 @@ export interface PharmacyProfile {
   rating_count: number
   medicines_in_stock: number
   is_favorite: boolean
+  delivery_enabled: boolean
+  delivery_fee: number
+  delivery_min_order: number
+  delivery_radius_km: number
+  delivery_free_above: number | null
   reviews: { rating: number; comment: string; who: string; at: string }[]
 }
 
@@ -450,3 +479,5 @@ export interface H1Entry {
 }
 
 export type ReportRow = Record<string, string | number | null>
+
+export interface CustomerAddress { id: string; label: string; address: string; phone: string; lat: number | null; lng: number | null; is_default: boolean }

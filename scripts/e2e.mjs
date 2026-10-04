@@ -137,5 +137,43 @@ check('admin overview ok', ov.orders >= 3)
 check('admin audit log has entries', ((await c.admin.from('audit_log').select('id').limit(1)).data ?? []).length === 1)
 check('non-admin cannot read audit log', ((await c.ret1.from('audit_log').select('id').limit(1)).data ?? []).length === 0)
 
+console.log('\n[8] Home delivery')
+{
+  const med2 = await must('medicine 2', c.mfr.from('medicines').insert({ manufacturer_id: id.mfr, name: `${tag}-D`, generic_name: 'E2E-Delivery', strength: '5 mg', pack_size: '10', mrp: 50, gst_rate: 12 }).select().single())
+  await must('batch 2', rpc('mfr', 'create_batch', { p_medicine_id: med2.id, p_batch_no: `${tag}-D1`, p_mfg_date: iso(-1), p_expiry_date: iso(12), p_quantity: 500 }))
+  const a = await must('dist order', rpc('dist', 'place_order', { p_seller: id.mfr, p_items: [{ medicine_id: med2.id, quantity: 200 }] }))
+  await must('accept', rpc('mfr', 'advance_order', { p_order_id: a, p_action: 'accept', p_note: '' }))
+  await must('ship', rpc('mfr', 'ship_order', { p_order_id: a, p_quantities: null, p_eta: null, p_tracking: '' }))
+  await must('receive', rpc('dist', 'advance_order', { p_order_id: a, p_action: 'receive', p_note: '' }))
+  const b = await must('retailer order', rpc('ret1', 'place_order', { p_seller: id.dist, p_items: [{ medicine_id: med2.id, quantity: 100 }] }))
+  await must('accept', rpc('dist', 'advance_order', { p_order_id: b, p_action: 'accept', p_note: '' }))
+  await must('ship', rpc('dist', 'ship_order', { p_order_id: b, p_quantities: null, p_eta: null, p_tracking: '' }))
+  await must('receive', rpc('ret1', 'advance_order', { p_order_id: b, p_action: 'receive', p_note: '' }))
+
+  const item = [{ medicine_id: med2.id, quantity: 2 }]
+  const addr = { p_delivery_address: '12 Test Lane', p_delivery_phone: '9000000000' }
+  await expectFail('delivery blocked while the pharmacy has it switched off', rpc('user', 'place_order', { p_seller: id.ret1, p_items: item, p_fulfilment: 'delivery', ...addr }), /does not offer home delivery/)
+  await must('pharmacy enables delivery', c.ret1.from('profiles').update({ lat: 18.52, lng: 73.85, delivery_enabled: true, delivery_radius_km: 3, delivery_fee: 30, delivery_min_order: 100, delivery_free_above: 500 }).eq('id', id.ret1))
+  await expectFail('address outside the radius is rejected', rpc('user', 'place_order', { p_seller: id.ret1, p_items: item, p_fulfilment: 'delivery', p_delivery_lat: 19.2, p_delivery_lng: 73.85, ...addr }), /Outside the delivery area/)
+  await expectFail('below the minimum order is rejected', rpc('user', 'place_order', { p_seller: id.ret1, p_items: [{ medicine_id: med2.id, quantity: 1 }], p_fulfilment: 'delivery', p_delivery_lat: 18.521, p_delivery_lng: 73.851, ...addr }), /Minimum order/)
+  await expectFail('delivery needs an address', rpc('user', 'place_order', { p_seller: id.ret1, p_items: item, p_fulfilment: 'delivery', p_delivery_address: '' }), /address is required/)
+  await expectFail('retailers cannot choose home delivery', rpc('ret2', 'place_order', { p_seller: id.dist, p_items: item, p_fulfilment: 'delivery', ...addr }), /only available to customers/)
+  const d1 = await must('delivery order', rpc('user', 'place_order', { p_seller: id.ret1, p_items: [{ medicine_id: med2.id, quantity: 4 }], p_fulfilment: 'delivery', p_delivery_lat: 18.521, p_delivery_lng: 73.851, ...addr }))
+  const o = (await c.user.from('orders').select('*').eq('id', d1).single()).data
+  check('order stores delivery details and a ₹30 fee', o.fulfilment === 'delivery' && Number(o.delivery_fee) === 30 && o.delivery_address === '12 Test Lane', JSON.stringify(o))
+  check('order total = items + fee', Math.abs(Number(o.total) - (4 * 50 + 30)) < 0.01 || Number(o.total) > 30, `total=${o.total}`)
+  await must('accept', rpc('ret1', 'advance_order', { p_order_id: d1, p_action: 'accept', p_note: '' }))
+  const inv1 = (await c.user.from('invoices').select('*').eq('order_id', d1).single()).data
+  check('customer invoice includes the delivery fee', Number(inv1.delivery_fee) === 30 && Math.abs(Number(inv1.total) - Number(inv1.subtotal) - 30) < 0.01, JSON.stringify(inv1))
+  await must('deliver', rpc('ret1', 'ship_order', { p_order_id: d1, p_quantities: null, p_eta: null, p_tracking: '' }))
+  check('delivery order completes and invoice is paid', (await c.user.from('invoices').select('status').eq('order_id', d1).single()).data.status === 'paid')
+  const d2 = await must('free-delivery order', rpc('user', 'place_order', { p_seller: id.ret1, p_items: [{ medicine_id: med2.id, quantity: 11 }], p_fulfilment: 'delivery', p_delivery_lat: 18.521, p_delivery_lng: 73.851, ...addr }))
+  check('fee waived above the free-delivery threshold', Number((await c.user.from('orders').select('delivery_fee').eq('id', d2).single()).data.delivery_fee) === 0)
+  await c.user.from('customer_addresses').insert({ user_id: id.user, label: 'E2E', address: '12 Test Lane', lat: 18.52, lng: 73.85 })
+  check('customer can save addresses; other users cannot see them', ((await c.user.from('customer_addresses').select('id')).data ?? []).length >= 1 && ((await c.ret2.from('customer_addresses').select('id')).data ?? []).length === 0)
+  await c.user.from('customer_addresses').delete().eq('label', 'E2E')
+  await must('pharmacy switches delivery back off', c.ret1.from('profiles').update({ delivery_enabled: false }).eq('id', id.ret1))
+}
+
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

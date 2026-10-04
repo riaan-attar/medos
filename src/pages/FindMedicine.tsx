@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { MapPin, Search, Sparkles } from 'lucide-react'
+import { Bike, List, Map as MapIcon, MapPin, Search, Sparkles } from 'lucide-react'
+import MapView from '../components/MapView'
 import { api } from '../lib/api'
 import { errMsg, money, num } from '../lib/format'
 import { fmtKm, useLocation } from '../lib/geo'
@@ -19,6 +20,7 @@ export default function FindMedicine() {
   const [err, setErr] = useState('')
   const [alt, setAlt] = useState<AvailabilityRow | null>(null)
   const [sort, setSort] = useState<'distance' | 'price'>('distance')
+  const [view, setView] = useState<'list' | 'map'>('list')
 
   async function search(e?: FormEvent, query = q) {
     e?.preventDefault()
@@ -46,9 +48,18 @@ export default function FindMedicine() {
         <>
           <div className="row between wrap">
             <span className="muted">{rows.length} result(s) for “{last}”{!loc.coords && ' · enable location to sort by distance'}</span>
-            <select value={sort} onChange={e => setSort(e.target.value as 'distance' | 'price')}><option value="distance">Nearest first</option><option value="price">Lowest price</option></select>
+            <div className="row gap">
+              <div className="seg"><button className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}><List size={14} /> List</button><button className={view === 'map' ? 'on' : ''} onClick={() => setView('map')}><MapIcon size={14} /> Map</button></div>
+              <select value={sort} onChange={e => setSort(e.target.value as 'distance' | 'price')}><option value="distance">Nearest first</option><option value="price">Lowest price</option></select>
+            </div>
           </div>
-          <div className="cards">
+          {view === 'map' && (() => {
+            const seen = new Map<string, { id: string; lat: number; lng: number; title: string; subtitle: string; onOpen: () => void }>()
+            for (const r of sorted) if (r.lat != null && r.lng != null && !seen.has(r.seller_id))
+              seen.set(r.seller_id, { id: r.seller_id, lat: r.lat, lng: r.lng, title: r.org_name, subtitle: `${r.medicine} · ${money(r.unit_price)}${r.distance_km != null ? ` · ${fmtKm(r.distance_km)}` : ''}`, onOpen: () => nav(`/pharmacy/${r.seller_id}`) })
+            return seen.size ? <MapView points={[...seen.values()]} me={loc.coords} height={380} /> : <Alert tone="info">None of these pharmacies has set a map location yet.</Alert>
+          })()}
+          <div className="cards" hidden={view === 'map'}>
             {sorted.map(r => (
               <div key={r.seller_id + r.medicine_id} className="card result">
                 <div className="row between"><div><b>{r.medicine}</b> <span className="muted">{r.strength} · {r.dosage_form}</span></div>
@@ -57,6 +68,7 @@ export default function FindMedicine() {
                 <div className="row between"><Link to={`/pharmacy/${r.seller_id}`}><b>{r.org_name}</b></Link>{r.verified && <Badge tone="good">verified</Badge>}</div>
                 <div className="muted small">{r.city}{r.address && ` · ${r.address}`}{r.distance_km != null && <> · <b>{fmtKm(r.distance_km)} away</b></>}</div>
                 <div className="row between"><Rating value={r.rating_avg} count={r.rating_count} /><span className="muted small">{num(r.available)} in stock</span></div>
+                {r.delivery_enabled && <div className="small" style={{ color: 'var(--good)' }}><Bike size={13} /> Home delivery{Number(r.delivery_fee) > 0 ? ` · ₹${r.delivery_fee}` : ' · free'}{Number(r.delivery_min_order) > 0 ? ` · min ₹${r.delivery_min_order}` : ''}</div>}
                 <div className="row gap">
                   <button className="btn primary grow" onClick={() => nav(`/orders/new/${r.seller_id}?prefill=${r.medicine_id}:1`)}>Reserve</button>
                   {r.generic_name && <button className="btn" onClick={() => setAlt(r)}><Sparkles size={14} /> Alternatives</button>}

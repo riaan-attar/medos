@@ -1,8 +1,9 @@
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Heart, MapPin, Phone, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Bike, Heart, MapPin, Phone, ShieldCheck } from 'lucide-react'
+import MapView from '../components/MapView'
 import { useAuth } from '../auth/AuthContext'
 import { api } from '../lib/api'
-import { errMsg, fmtDate, roleLabel } from '../lib/format'
+import { errMsg, fmtDate, money, roleLabel } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import { Avatar, Badge, Empty, ErrorBox, Rating, Skeleton } from '../components/ui'
 import { useToast } from '../components/Toast'
@@ -17,7 +18,7 @@ export default function PharmacyPage() {
   if (error) return <ErrorBox message={error} onRetry={reload} />
   if (!p) return <Empty title="Profile not found" />
   const consumer = profile!.role === 'consumer'
-  const mapUrl = p.lat != null && p.lng != null ? `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=16/${p.lat}/${p.lng}` : null
+  const hasPos = p.lat != null && p.lng != null
 
   return (
     <>
@@ -31,7 +32,6 @@ export default function PharmacyPage() {
           <div className="row gap wrap muted small meta-row">
             <span><MapPin size={14} /> {[p.address, p.city].filter(Boolean).join(', ') || '—'}</span>
             {p.phone && <span><Phone size={14} /> {p.phone}</span>}
-            {mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer">Open map</a>}
           </div>
         </div>
         <div className="stack">
@@ -44,6 +44,11 @@ export default function PharmacyPage() {
             <button className="btn primary" onClick={() => nav(`/marketplace?seller=${p.id}`)}>Buy from them</button>}
         </div>
       </section>
+      {p.delivery_enabled && (
+        <section className="card row gap wrap"><Bike size={20} color="var(--good)" /><div><b>Home delivery available</b>
+          <div className="muted small">Within {p.delivery_radius_km} km · {Number(p.delivery_fee) > 0 ? `${money(p.delivery_fee)} fee` : 'free delivery'}{p.delivery_free_above != null && Number(p.delivery_fee) > 0 ? ` (free above ${money(p.delivery_free_above)})` : ''}{Number(p.delivery_min_order) > 0 && ` · minimum order ${money(p.delivery_min_order)}`}</div></div></section>
+      )}
+      {hasPos && <MapView height={260} radiusKm={p.delivery_enabled ? Number(p.delivery_radius_km) : null} points={[{ id: p.id, lat: p.lat!, lng: p.lng!, title: p.org_name, subtitle: p.address }]} />}
       {p.about && <section className="card"><h2>About</h2><p>{p.about}</p></section>}
       <section className="card"><h2>{p.medicines_in_stock} medicines in stock</h2></section>
       <section className="card">

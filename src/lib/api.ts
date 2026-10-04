@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type {
-  AccountBalance, AdminOverview, Alternative, AppNotification, AuditRow, AvailabilityRow, Batch, CatalogItem,
+  AccountBalance, AdminOverview, CustomerAddress, Alternative, AppNotification, AuditRow, AvailabilityRow, Batch, CatalogItem,
   DashboardAnalytics, DashboardStats, Distribution, InventoryRow, Invoice, Listing, Medicine, Movement, Order,
   MyContext, OrderBundle, OrderEvent, OrderMessage, OrgInvite, Payment, PharmacyProfile, Profile, ReorderSuggestion, RetailCustomer,
   H1Entry, ReportRow, ReturnRow, Review, SaleBill, Shipment, Supplier, TeamMember, TradeRelation, VerifyResult, InviteInfo,
@@ -19,7 +19,7 @@ export const api = {
   async profile(id: string) {
     return ok(await supabase.from('profiles').select('*').eq('id', id).single()) as Profile
   },
-  async updateProfile(id: string, patch: Partial<Pick<Profile, 'full_name' | 'org_name' | 'phone' | 'address' | 'city' | 'license_no' | 'lat' | 'lng' | 'about' | 'gstin' | 'state' | 'state_code' | 'accepted_terms_at'>>) {
+  async updateProfile(id: string, patch: Partial<Pick<Profile, 'full_name' | 'org_name' | 'phone' | 'address' | 'city' | 'license_no' | 'lat' | 'lng' | 'about' | 'gstin' | 'state' | 'state_code' | 'accepted_terms_at' | 'delivery_enabled' | 'delivery_radius_km' | 'delivery_fee' | 'delivery_min_order' | 'delivery_free_above'>>) {
     ok(await supabase.from('profiles').update(patch).eq('id', id))
   },
 
@@ -108,10 +108,27 @@ export const api = {
   async searchAvailability(q: string, lat?: number | null, lng?: number | null) {
     return ok(await supabase.rpc('search_availability', { p_query: q, p_lat: lat ?? null, p_lng: lng ?? null })) as AvailabilityRow[]
   },
-  async placeOrder(sellerId: string, items: { medicine_id: string; quantity: number }[], notes: string, prescriptionPath?: string | null) {
+  async placeOrder(
+    sellerId: string, items: { medicine_id: string; quantity: number }[], notes: string, prescriptionPath?: string | null,
+    delivery?: { address: string; lat: number | null; lng: number | null; phone: string } | null,
+  ) {
     return ok(await supabase.rpc('place_order', {
       p_seller: sellerId, p_items: items, p_notes: notes, p_prescription_path: prescriptionPath ?? null,
+      p_fulfilment: delivery ? 'delivery' : 'pickup', p_delivery_address: delivery?.address ?? '',
+      p_delivery_lat: delivery?.lat ?? null, p_delivery_lng: delivery?.lng ?? null, p_delivery_phone: delivery?.phone ?? '',
     })) as string
+  },
+  async addresses() {
+    return ok(await supabase.from('customer_addresses').select('*').order('is_default', { ascending: false }).order('created_at')) as CustomerAddress[]
+  },
+  async saveAddress(userId: string, a: Partial<CustomerAddress>) {
+    const { id, ...rest } = a
+    if (rest.is_default) ok(await supabase.from('customer_addresses').update({ is_default: false }).eq('user_id', userId))
+    if (id) ok(await supabase.from('customer_addresses').update(rest).eq('id', id))
+    else ok(await supabase.from('customer_addresses').insert({ ...rest, user_id: userId }))
+  },
+  async deleteAddress(id: string) {
+    ok(await supabase.from('customer_addresses').delete().eq('id', id))
   },
   async orders(uid: string) {
     return ok(
