@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type {
-  AccountBalance, AdminOverview, CustomerAddress, Alternative, AppNotification, AuditRow, AvailabilityRow, Batch, CatalogItem,
+  AccountBalance, AdminOverview, CustomerAddress, CustomerBalance, HeldBill, LedgerEntry, Alternative, AppNotification, AuditRow, AvailabilityRow, Batch, CatalogItem,
   DashboardAnalytics, DashboardStats, Distribution, InventoryRow, Invoice, Listing, Medicine, Movement, Order,
   MyContext, OrderBundle, OrderEvent, OrderMessage, OrgInvite, Payment, PharmacyProfile, Profile, ReorderSuggestion, RetailCustomer,
   H1Entry, ReportRow, ReturnRow, Review, SaleBill, Shipment, Supplier, TeamMember, TradeRelation, VerifyResult, InviteInfo,
@@ -250,6 +250,24 @@ export const api = {
   },
   async refundBill(id: string, lines: { line_id: string; quantity: number }[], reason: string) {
     return ok(await supabase.rpc('refund_bill', { p_bill_id: id, p_lines: lines, p_reason: reason })) as number
+  },
+  async heldBills() {
+    return ok(await supabase.from('held_bills').select('*').order('created_at', { ascending: false })) as HeldBill[]
+  },
+  async holdBill(retailerId: string, label: string, payload: HeldBill['payload']) {
+    ok(await supabase.from('held_bills').insert({ retailer_id: retailerId, label, payload }))
+  },
+  async deleteHeldBill(id: string) {
+    ok(await supabase.from('held_bills').delete().eq('id', id))
+  },
+  async customerBalances() {
+    return ok(await supabase.rpc('customer_balances')) as CustomerBalance[]
+  },
+  async customerLedger(customerId: string) {
+    return ok(await supabase.from('customer_ledger').select('*, sale_bills(bill_no)').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(200)) as unknown as LedgerEntry[]
+  },
+  async collectPayment(customerId: string, amount: number, mode: string, note: string) {
+    return ok(await supabase.rpc('collect_customer_payment', { p_customer: customerId, p_amount: amount, p_mode: mode, p_note: note })) as number
   },
   async customers() {
     return ok(await supabase.from('retail_customers').select('*').order('created_at', { ascending: false })) as RetailCustomer[]

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Printer, Undo2 } from 'lucide-react'
+import { printDoc } from '../lib/print'
 import { useAuth } from '../auth/AuthContext'
 import { api } from '../lib/api'
 import { errMsg, fmtDateTime, money } from '../lib/format'
@@ -71,7 +72,8 @@ export default function Sales() {
                   value={refund[l.id] ?? ''} onChange={e => setRefund({ ...refund, [l.id]: Math.min(l.quantity - l.returned_qty, Math.max(0, Number(e.target.value))) })} /></td></tr>))}</tbody>
           </table></div>
           <div className="row gap end no-print">
-            <button className="btn" onClick={() => window.print()}><Printer size={16} /> Print</button>
+            <button className="btn" onClick={() => printDoc('a4')}><Printer size={16} /> Print A4</button>
+            <button className="btn" onClick={() => printDoc('thermal')}><Printer size={16} /> Thermal</button>
             <button className="btn danger" disabled={busy || !Object.values(refund).some(q => q > 0)} onClick={doRefund}><Undo2 size={16} /> Refund selected</button>
           </div>
         </Modal>

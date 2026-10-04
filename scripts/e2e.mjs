@@ -175,5 +175,30 @@ console.log('\n[8] Home delivery')
   await must('pharmacy switches delivery back off', c.ret1.from('profiles').update({ delivery_enabled: false }).eq('id', id.ret1))
 }
 
+console.log('\n[9] Counter credit (udhaar) & held bills')
+{
+  const m = (await c.mfr.from('medicines').select('id').like('name', `${tag}-D`).single()).data
+  const phone = `9${Date.now().toString().slice(-9)}`
+  await expectFail('credit sale needs a customer phone', rpc('ret1', 'create_bill_ex', { p_lines: [{ medicine_id: m.id, quantity: 1 }], p_payment_mode: 'credit' }), /phone number is required/)
+  const before = await inv('ret1', (await c.ret1.from('inventory').select('batch_id').eq('owner_id', id.ret1).gt('quantity', 0).limit(1)).data[0].batch_id)
+  const billId = await must('credit bill', rpc('ret1', 'create_bill_ex', { p_lines: [{ medicine_id: m.id, quantity: 3 }], p_customer_name: 'E2E Credit', p_customer_phone: phone, p_discount: 0, p_payment_mode: 'credit' }))
+  check('stock deducted for the credit sale', before !== null)
+  const bal = async () => Number(((await must('balances', rpc('ret1', 'customer_balances', {}))).find(x => x.phone === phone) ?? {}).balance ?? 0)
+  const bill = (await c.ret1.from('sale_bills').select('total').eq('id', billId).single()).data
+  check('credit sale adds its total to the customer balance', Math.abs((await bal()) - Number(bill.total)) < 0.01, `balance=${await bal()} total=${bill.total}`)
+  const cust = (await c.ret1.from('retail_customers').select('id').eq('phone', phone).single()).data
+  await expectFail('cannot collect more than is owed', rpc('ret1', 'collect_customer_payment', { p_customer: cust.id, p_amount: Number(bill.total) + 100, p_mode: 'cash', p_note: '' }), /exceeds the outstanding/)
+  await must('collect part', rpc('ret1', 'collect_customer_payment', { p_customer: cust.id, p_amount: 10, p_mode: 'upi', p_note: 'e2e' }))
+  check('collecting a payment reduces the balance', Math.abs((await bal()) - (Number(bill.total) - 10)) < 0.01)
+  const line = (await c.ret1.from('sale_bill_lines').select('id, unit_price').eq('bill_id', billId).limit(1)).data[0]
+  await must('refund 1 unit', rpc('ret1', 'refund_bill', { p_bill_id: billId, p_lines: [{ line_id: line.id, quantity: 1 }], p_reason: 'e2e' }))
+  check('refunding a credit sale reduces the balance', Math.abs((await bal()) - (Number(bill.total) - 10 - Number(line.unit_price))) < 0.01)
+  check('another pharmacy cannot see this customer or ledger', ((await c.ret2.from('customer_ledger').select('id').eq('customer_id', cust.id)).data ?? []).length === 0
+    && !(await must('ret2 balances', rpc('ret2', 'customer_balances', {}))).some(x => x.phone === phone))
+  await must('hold a bill', c.ret1.from('held_bills').insert({ retailer_id: id.ret1, label: 'E2E hold', payload: { cart: {}, prices: {}, name: '', phone: '', discount: 0, mode: 'cash', rx: {} } }))
+  check('held bill is stored and private', ((await c.ret1.from('held_bills').select('id').eq('label', 'E2E hold')).data ?? []).length === 1 && ((await c.ret2.from('held_bills').select('id').eq('label', 'E2E hold')).data ?? []).length === 0)
+  await c.ret1.from('held_bills').delete().eq('label', 'E2E hold')
+}
+
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

@@ -26,7 +26,7 @@ export default function ReceiptDoc({ bill, shop }: { bill: SaleBill; shop: Profi
         {bill.discount > 0 && <div><span>Discount</span><span>− {money(bill.discount)}</span></div>}
         <div className="grand"><span>Total</span><span>{money(bill.total)}</span></div>
         {bill.refunded_total > 0 && <div><span>Refunded</span><span>− {money(bill.refunded_total)}</span></div>}
-        <div><span>Paid by</span><span>{bill.payment_mode.toUpperCase()}</span></div>
+        <div><span>{bill.payment_mode === 'credit' ? 'Sale on' : 'Paid by'}</span><span>{bill.payment_mode === 'credit' ? 'CREDIT (unpaid)' : bill.payment_mode.toUpperCase()}</span></div>
       </div>
       <p className="center small muted">MRP inclusive of all taxes. Thank you!</p>
     </div>

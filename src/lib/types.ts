@@ -481,3 +481,12 @@ export interface H1Entry {
 export type ReportRow = Record<string, string | number | null>
 
 export interface CustomerAddress { id: string; label: string; address: string; phone: string; lat: number | null; lng: number | null; is_default: boolean }
+
+export interface HeldBill {
+  id: string
+  label: string
+  created_at: string
+  payload: { cart: Record<string, number>; prices: Record<string, number>; name: string; phone: string; discount: number; mode: 'cash' | 'upi' | 'card' | 'credit'; rx: { patient: string; doctor: string; doctorReg: string; rxNo: string } }
+}
+export interface CustomerBalance { customer_id: string; name: string; phone: string; balance: number; last_activity: string | null; bills: number; spent: number }
+export interface LedgerEntry { id: string; kind: 'charge' | 'payment' | 'refund'; amount: number; mode: string; note: string; created_at: string; sale_bills: { bill_no: string } | null }

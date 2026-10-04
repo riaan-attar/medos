@@ -19,8 +19,9 @@
 | 1 Teams, staff & permissions (`20261006000000_v3_teams.sql`) | ✅ applied, e2e green |
 | 2 GST-correct invoices, drug schedules, H1 register, legal pages (`20261007000000_v3_compliance.sql`) | ✅ applied, e2e green |
 | 3 Reports & exports (`20261008000000_v3_reports.sql`) | ✅ applied, e2e green |
-| 4 Home delivery, saved addresses, Leaflet/OSM maps (`20261009000000_v3_delivery.sql`) | code done · **migration not yet applied** · `seed-delivery.mjs` + e2e section [8] written, not run |
-| 5 POS upgrade & customer credit · 6 Data import · 7 Forecasting · 8 Email notifications · 9 Polish/help/PWA · 10 QA · 11 Handover (e2e run, reset script, CI) · 12 Payments & plans (last) | planned |
+| 4 Home delivery, saved addresses, Leaflet/OSM maps (`20261009000000_v3_delivery.sql`) | ✅ applied (delivery columns + 37 addresses + delivery orders confirmed) · e2e section [8] written, not run |
+| 5 POS upgrade: camera barcode scan, hold/resume, per-line price, credit sales (udhaar) + customer ledger, thermal receipts (`20261010000000_v3_pos.sql`) | code done · **migration not yet applied** · e2e section [9] written, not run |
+| 6 Data import · 7 Forecasting · 8 Email notifications · 9 Polish/help/PWA · 10 QA · 11 Handover (e2e run, reset script, CI) · 12 Payments & plans (last) | planned |
 
 Apply v3 migrations **in order** after v2. Note: `create_bill` / `record_sale` are no longer callable from the client — use `create_bill_ex` (prescription rules enforced). Scripts were updated accordingly.
 
