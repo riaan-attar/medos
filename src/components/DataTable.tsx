@@ -17,7 +17,7 @@ export interface Column<T> {
 interface Props<T> {
   rows: T[]
   columns: Column<T>[]
-  rowKey: (row: T) => string
+  rowKey: (row: T, index: number) => string
   pageSize?: number
   searchable?: boolean
   searchPlaceholder?: string
@@ -106,8 +106,8 @@ export default function DataTable<T>({
                 </tr>
               </thead>
               <tbody>
-                {slice.map(r => (
-                  <tr key={rowKey(r)} className={onRowClick ? 'clickable' : ''} onClick={onRowClick ? () => onRowClick(r) : undefined}>
+                {slice.map((r, ri) => (
+                  <tr key={rowKey(r, cur * pageSize + ri)} className={onRowClick ? 'clickable' : ''} onClick={onRowClick ? () => onRowClick(r) : undefined}>
                     {columns.map(c => <td key={c.key} className={c.align === 'right' ? 'r' : ''}>{c.render ? c.render(r) : String(val(c, r) ?? '—')}</td>)}
                   </tr>
                 ))}

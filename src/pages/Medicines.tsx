@@ -13,8 +13,8 @@ const FORMS = ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Drops', '
 const GST = [0, 5, 12, 18, 28]
 
 export default function Medicines() {
-  const { session } = useAuth()
-  const uid = session!.user.id
+  const { profile } = useAuth()
+  const uid = profile!.id
   const toast = useToast()
   const { data, error, loading, reload } = useAsync(() => api.myMedicines(uid), [uid])
   const [editing, setEditing] = useState<Partial<Medicine> | null>(null)
@@ -39,7 +39,8 @@ export default function Medicines() {
     { key: 'pack_size', header: 'Pack' },
     { key: 'mrp', header: 'MRP', align: 'right', render: m => money(m.mrp) },
     { key: 'gst_rate', header: 'GST', align: 'right', render: m => `${m.gst_rate}%` },
-    { key: 'requires_rx', header: 'Rx', value: m => (m.requires_rx ? 'Rx' : ''), render: m => (m.requires_rx ? <Badge tone="info">Rx</Badge> : '—') },
+    { key: 'drug_schedule', header: 'Schedule', render: m => (m.drug_schedule === 'OTC' ? <span className="muted">OTC</span> : <Badge tone={m.drug_schedule === 'X' ? 'bad' : m.drug_schedule === 'H1' ? 'warn' : 'info'}>{m.drug_schedule}</Badge>) },
+    { key: 'hsn_code', header: 'HSN' },
     { key: 'active', header: 'Status', value: m => (m.active ? 'active' : 'inactive'), render: m => (m.active ? <Badge tone="good">active</Badge> : <Badge>inactive</Badge>) },
     { key: 'act', header: '', noSort: true, noCsv: true, align: 'right', render: m => <button className="btn ghost sm" onClick={() => setEditing(m)}><Pencil size={14} /> Edit</button> },
   ]
@@ -47,7 +48,7 @@ export default function Medicines() {
   return (
     <>
       <PageHeader title="Medicine catalog" subtitle="Products you manufacture. Add one before producing a batch."
-        actions={<button className="btn primary" onClick={() => setEditing({ dosage_form: 'Tablet', category: 'General', requires_rx: false, gst_rate: 12 })}><Plus size={16} /> New medicine</button>} />
+        actions={<button className="btn primary" onClick={() => setEditing({ dosage_form: 'Tablet', category: 'General', requires_rx: false, gst_rate: 12, hsn_code: '3004', drug_schedule: 'OTC' })}><Plus size={16} /> New medicine</button>} />
       {loading && !data && <Skeleton />}
       {error && <ErrorBox message={error} onRetry={reload} />}
       {data && <DataTable rows={data} columns={cols} rowKey={m => m.id} exportName="medicines" searchPlaceholder="Search medicines…"
@@ -70,8 +71,14 @@ export default function Medicines() {
                 <select value={editing.gst_rate ?? 12} onChange={e => set('gst_rate', Number(e.target.value))}>{GST.map(g => <option key={g} value={g}>{g}%</option>)}</select>
               </Field>
               <Field label="Barcode (optional)" hint="Used for quick lookup at the counter"><input value={editing.barcode ?? ''} onChange={e => set('barcode', e.target.value)} /></Field>
+              <Field label="HSN code" hint="3004 for most medicaments"><input value={editing.hsn_code ?? ''} onChange={e => set('hsn_code', e.target.value)} /></Field>
+              <Field label="Drug schedule" hint="H / H1 need a prescription; H1 is logged in a register; X cannot be sold online or over the counter">
+                <select value={editing.drug_schedule ?? 'OTC'} onChange={e => { const v = e.target.value as Medicine['drug_schedule']; set('drug_schedule', v); set('requires_rx', v !== 'OTC') }}>
+                  <option value="OTC">OTC — no prescription</option><option value="H">Schedule H</option><option value="H1">Schedule H1</option><option value="X">Schedule X</option>
+                </select>
+              </Field>
             </div>
-            <label className="check"><input type="checkbox" checked={!!editing.requires_rx} onChange={e => set('requires_rx', e.target.checked)} /> Prescription required</label>
+            <Field label="Composition (optional)"><input value={editing.composition ?? ''} onChange={e => set('composition', e.target.value)} placeholder="Paracetamol IP 650 mg" /></Field>
             {editing.id && <label className="check"><input type="checkbox" checked={editing.active ?? true} onChange={e => set('active', e.target.checked)} /> Active</label>}
             <div className="row gap end"><button type="button" className="btn ghost" onClick={() => setEditing(null)}>Cancel</button><button className="btn primary" disabled={busy}>Save</button></div>
           </form>

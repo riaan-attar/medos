@@ -18,7 +18,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     ref.current?.focus()
-    if (session && profile && profile.role !== 'admin') api.orders(session.user.id).then(setOrders).catch(() => {})
+    if (session && profile && profile.role !== 'admin') api.orders(profile!.id).then(setOrders).catch(() => {})
   }, [session, profile])
 
   const items = useMemo<Item[]>(() => {
@@ -30,7 +30,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
     ]
     const ords: Item[] = orders.map(o => ({
       id: o.id, label: o.order_no, to: `/orders/${o.id}`,
-      hint: `${o.status.replace('_', ' ')} · ${(o.buyer_id === session?.user.id ? o.seller : o.buyer)?.org_name ?? ''}`,
+      hint: `${o.status.replace('_', ' ')} · ${(o.buyer_id === profile?.id ? o.seller : o.buyer)?.org_name ?? ''}`,
     }))
     const needle = q.trim().toLowerCase()
     const all = [...pages, ...ords]

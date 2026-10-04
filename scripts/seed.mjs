@@ -93,7 +93,7 @@ for (const [k, [lat, lng]] of Object.entries(coords)) await admin.from('profiles
 await admin.from('profiles').update({ about: 'Family-run pharmacy open 8am–11pm, free home delivery within 3 km.', gstin: '27ABCDE1234F1Z5' }).eq('id', ids.ret1)
 await admin.from('profiles').update({ gstin: '36ABCDE9999F1Z1' }).eq('id', ids.mfr)
 await clients.mfr.from('trade_relations').upsert({ seller_id: ids.mfr, buyer_id: ids.dist, credit_limit: 500000, discount_pct: 2 }, { onConflict: 'seller_id,buyer_id' })
-await clients.dist.from('trade_relations').upsert({ seller_id: ids.dist, buyer_id: ids.ret1, credit_limit: 100000, discount_pct: 1 }, { onConflict: 'seller_id,buyer_id' })
+await clients.dist.from('trade_relations').upsert({ seller_id: ids.dist, buyer_id: ids.ret1, credit_limit: 200000, discount_pct: 1 }, { onConflict: 'seller_id,buyer_id' })
 
 const { data: invs } = await clients.mfr.from('invoices').select('id, total, status').eq('seller_id', ids.mfr).eq('status', 'unpaid').limit(1)
 if (invs?.[0]) await rpc('mfr', 'record_payment', { p_invoice_id: invs[0].id, p_amount: Math.round(invs[0].total * 0.5), p_method: 'bank', p_reference: 'UTR-SEED-1', p_note: 'Advance' })
@@ -103,7 +103,7 @@ const cid = await rpc('user', 'place_order', { p_seller: ids.ret1, p_items: [{ m
 await rpc('ret1', 'advance_order', { p_order_id: cid, p_action: 'accept', p_note: '' })
 await rpc('ret1', 'ship_order', { p_order_id: cid, p_quantities: null, p_eta: null, p_tracking: '' })
 await rpc('user', 'submit_review', { p_order_id: cid, p_rating: 5, p_comment: 'Fast and genuine medicines.' })
-await rpc('ret1', 'create_bill', { p_lines: [{ medicine_id: medIds[0], quantity: 4 }, { medicine_id: medIds[3], quantity: 2 }], p_customer_name: 'Walk-in Ravi', p_customer_phone: '9876543210', p_discount: 5, p_payment_mode: 'upi' })
+await rpc('ret1', 'create_bill_ex', { p_lines: [{ medicine_id: medIds[0], quantity: 4 }, { medicine_id: medIds[3], quantity: 2 }], p_customer_name: 'Walk-in Ravi', p_customer_phone: '9876543210', p_discount: 5, p_payment_mode: 'upi' })
 
 console.log('Seed complete. Log in with password', PASSWORD)
 for (const u of USERS) console.log(' ', u.key.padEnd(5), u.email, u.key === 'admin' ? '(admin)' : `(${u.role})`)

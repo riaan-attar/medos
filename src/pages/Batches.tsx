@@ -17,8 +17,8 @@ const plusMonths = (m: number) => { const d = new Date(); d.setMonth(d.getMonth(
 const verifyUrl = (no: string) => `${window.location.origin}/check/${encodeURIComponent(no)}`
 
 export default function Batches() {
-  const { session } = useAuth()
-  const uid = session!.user.id
+  const { profile } = useAuth()
+  const uid = profile!.id
   const toast = useToast()
   const batches = useAsync(() => api.myBatches(uid), [uid])
   const meds = useAsync(() => api.myMedicines(uid), [uid])

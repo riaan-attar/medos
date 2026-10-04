@@ -94,7 +94,7 @@ export default function Landing() {
         <h2>Ready to see your whole inventory in one place?</h2>
         <Link to="/signup" className="btn lg light-btn">Get started <ArrowRight size={18} /></Link>
       </section>
-      <footer className="land-foot muted small">© MedOS · Always verify medicines before use.</footer>
+      <footer className="land-foot muted small">© MedOS · Always verify medicines before use. · <Link to="/legal/terms">Terms</Link> · <Link to="/legal/privacy">Privacy</Link> · <Link to="/legal/refunds">Refunds</Link></footer>
     </div>
   )
 }

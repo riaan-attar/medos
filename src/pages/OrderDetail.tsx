@@ -23,8 +23,8 @@ type Dialog = null | 'ship' | 'reject' | 'cancel' | 'close' | 'pay' | 'return' |
 
 export default function OrderDetail() {
   const { id } = useParams()
-  const { session } = useAuth()
-  const uid = session!.user.id
+  const { profile } = useAuth()
+  const uid = profile!.id
   const toast = useToast()
   const nav = useNavigate()
   const { data: b, error, loading, reload } = useAsync(() => api.orderBundle(id!), [id])

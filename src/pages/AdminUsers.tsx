@@ -13,7 +13,7 @@ export default function AdminUsers() {
   const { data, error, loading, reload } = useAsync(() => api.allProfiles(), [])
   const [role, setRole] = useState('all')
   const [state, setState] = useState('all')
-  const rows = (data ?? []).filter(p => (role === 'all' || p.role === role) && (state === 'all' || (state === 'unverified' ? !p.verified && p.role !== 'consumer' && p.role !== 'admin' : state === 'suspended' ? p.status === 'suspended' : true)))
+  const rows = (data ?? []).filter(p => !p.org_id && (role === 'all' || p.role === role) && (state === 'all' || (state === 'unverified' ? !p.verified && p.role !== 'consumer' && p.role !== 'admin' : state === 'suspended' ? p.status === 'suspended' : true)))
 
   async function act(fn: () => Promise<void>, ok: string) { try { await fn(); toast.ok(ok); reload() } catch (x) { toast.err(errMsg(x)) } }
 

@@ -30,6 +30,7 @@ export default function Login() {
       </form>
       <p className="center">New to MedOS? <Link to="/signup">Create an account</Link></p>
       <p className="center"><Link to="/check" className="row gap center-row"><ShieldCheck size={16} /> Verify a medicine batch without signing in</Link></p>
+      <p className="center muted small"><Link to="/legal/terms">Terms</Link> · <Link to="/legal/privacy">Privacy</Link></p>
     </AuthShell>
   )
 }

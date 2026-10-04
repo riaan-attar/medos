@@ -8,7 +8,7 @@ import { timeAgo } from '../lib/format'
 import type { AppNotification } from '../lib/types'
 
 export default function NotificationBell() {
-  const { session } = useAuth()
+  const { profile } = useAuth()
   const nav = useNavigate()
   const [items, setItems] = useState<AppNotification[]>([])
   const [open, setOpen] = useState(false)
@@ -17,14 +17,14 @@ export default function NotificationBell() {
   const load = useCallback(() => { api.notifications().then(setItems).catch(() => {}) }, [])
 
   useEffect(() => {
-    if (!session) return
-    const uid = session.user.id
+    if (!profile) return
+    const uid = profile.id
     load()
     const ch = supabase.channel('notif-' + uid)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` }, load)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [session, load])
+  }, [profile, load])
 
   useEffect(() => {
     if (!open) return

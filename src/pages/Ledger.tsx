@@ -15,8 +15,8 @@ const LABEL: Record<MovementType, string> = {
 }
 
 export default function Ledger() {
-  const { session } = useAuth()
-  const uid = session!.user.id
+  const { profile } = useAuth()
+  const uid = profile!.id
   const { data, error, loading, reload } = useAsync(() => api.movements(uid, 1000), [uid])
   const [type, setType] = useState('all')
   const rows = (data ?? []).filter(m => type === 'all' || m.movement_type === type)

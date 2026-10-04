@@ -35,9 +35,9 @@ function ChartCard({ title, children, hint }: { title: string; children: React.R
 }
 
 function BusinessHome() {
-  const { profile, session } = useAuth()
+  const { profile } = useAuth()
   const role = profile!.role
-  const uid = session!.user.id
+  const uid = profile!.id
   const s = useAsync(() => api.dashboard(), [])
   const a = useAsync(() => api.analytics(), [])
   const o = useAsync(() => api.orders(uid), [uid])
@@ -199,8 +199,8 @@ function RecentOrders({ orders, uid }: { orders: Order[]; uid: string }) {
 }
 
 function ConsumerHome() {
-  const { profile, session } = useAuth()
-  const o = useAsync(() => api.orders(session!.user.id), [session])
+  const { profile } = useAuth()
+  const o = useAsync(() => api.orders(profile!.id), [profile])
   const open = (o.data ?? []).filter(x => ['pending', 'accepted'].includes(x.status))
   return (
     <>

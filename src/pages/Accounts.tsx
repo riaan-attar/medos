@@ -9,8 +9,8 @@ import DataTable, { type Column } from '../components/DataTable'
 import type { AccountBalance, Invoice } from '../lib/types'
 
 export default function Accounts() {
-  const { session } = useAuth()
-  const uid = session!.user.id
+  const { profile } = useAuth()
+  const uid = profile!.id
   const nav = useNavigate()
   const inv = useAsync(() => api.invoices(), [])
   const bal = useAsync(() => api.balances(), [])

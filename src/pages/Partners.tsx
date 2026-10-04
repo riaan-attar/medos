@@ -11,8 +11,8 @@ import type { Profile, TradeRelation } from '../lib/types'
 
 // Sellers to businesses: manage credit limits and negotiated discounts per buyer
 export default function Partners() {
-  const { session, profile } = useAuth()
-  const uid = session!.user.id
+  const { profile } = useAuth()
+  const uid = profile!.id
   const role = profile!.role as 'manufacturer' | 'distributor'
   const toast = useToast()
   const buyers = useAsync(() => api.buyerDirectory(role), [role])

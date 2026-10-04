@@ -20,6 +20,10 @@ export interface Profile {
   about: string
   gstin: string
   status: 'active' | 'suspended'
+  org_id: string | null
+  state: string
+  state_code: string
+  accepted_terms_at: string | null
   created_at: string
 }
 
@@ -36,6 +40,9 @@ export interface Medicine {
   requires_rx: boolean
   gst_rate: number
   barcode: string
+  hsn_code: string
+  drug_schedule: 'OTC' | 'H' | 'H1' | 'X'
+  composition: string
   active: boolean
 }
 
@@ -266,6 +273,11 @@ export interface Invoice {
   total: number
   credit_total: number
   paid_total: number
+  cgst: number
+  sgst: number
+  igst: number
+  place_of_supply: string
+  tax_breakup: { rate: number; taxable: number; tax: number }[]
   due_date: string
   status: InvoiceStatus
   created_at: string
@@ -289,6 +301,7 @@ export interface Party { id: string; org_name: string; full_name: string; role: 
 export interface ShipmentLine {
   id: string
   quantity: number
+  order_item_id: string
   batch_id: string
   batches: { batch_no: string; expiry_date: string } | null
   order_items: { medicines: { name: string; strength: string } } | null
@@ -380,6 +393,10 @@ export interface SaleBill {
   total: number
   refunded_total: number
   payment_mode: 'cash' | 'upi' | 'card' | 'credit'
+  patient_name: string
+  doctor_name: string
+  doctor_reg_no: string
+  rx_number: string
   created_at: string
   sale_bill_lines?: SaleBillLine[]
 }
@@ -408,3 +425,28 @@ export interface PharmacyProfile {
 export interface Distribution { owner_id: string; org_name: string; role: Role; quantity: number; ack_status: string | null; ack_note: string | null }
 
 export interface AuditRow { id: string; actor_id: string | null; action: string; entity: string; entity_id: string | null; detail: Record<string, unknown>; created_at: string }
+
+export type MemberRole = 'owner' | 'manager' | 'pharmacist' | 'cashier' | 'warehouse' | 'accountant'
+export type Permission =
+  | 'catalog' | 'batches' | 'recall' | 'stock_adjust' | 'receive' | 'ship' | 'orders_manage' | 'sell' | 'refund'
+  | 'payments' | 'partners' | 'pricing' | 'returns' | 'reports' | 'customers' | 'settings' | 'team'
+
+export interface MyContext { org_id: string; member_role: MemberRole; is_staff: boolean; permissions: Permission[] }
+export interface TeamMember { user_id: string; full_name: string; email: string | null; member_role: Exclude<MemberRole, 'owner'>; active: boolean; created_at: string }
+export interface OrgInvite { code: string; member_role: Exclude<MemberRole, 'owner'>; email: string; expires_at: string; used_by: string | null; created_at: string }
+export interface InviteInfo { org_name: string; role: Role; member_role: Exclude<MemberRole, 'owner'> }
+
+export interface H1Entry {
+  id: string
+  quantity: number
+  patient_name: string
+  doctor_name: string
+  doctor_reg_no: string
+  rx_number: string
+  sold_at: string
+  medicines: { name: string; strength: string } | null
+  batches: { batch_no: string } | null
+  sale_bills: { bill_no: string } | null
+}
+
+export type ReportRow = Record<string, string | number | null>

@@ -4,16 +4,16 @@ import { useAuth } from '../auth/AuthContext'
 import { api } from '../lib/api'
 import { daysUntil, errMsg, fmtDate, money, num } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
-import { Alert, Badge, Empty, ErrorBox, Modal, PageHeader, Skeleton } from '../components/ui'
+import { Badge, Empty, ErrorBox, Modal, PageHeader, Skeleton } from '../components/ui'
 import ReceiptDoc from '../components/ReceiptDoc'
 import { useToast } from '../components/Toast'
 import type { SaleBill } from '../lib/types'
 
-interface Product { medicine_id: string; name: string; strength: string; pack_size: string; barcode: string; mrp: number; price: number; available: number; nearest: string; rx: boolean }
+interface Product { schedule: string; medicine_id: string; name: string; strength: string; pack_size: string; barcode: string; mrp: number; price: number; available: number; nearest: string; rx: boolean }
 
 export default function POS() {
-  const { session, profile } = useAuth()
-  const uid = session!.user.id
+  const { profile } = useAuth()
+  const uid = profile!.id
   const toast = useToast()
   const inv = useAsync(() => api.inventory(uid), [uid])
   const lst = useAsync(() => api.listings(uid), [uid])
@@ -26,6 +26,7 @@ export default function POS() {
   const [mode, setMode] = useState<'cash' | 'upi' | 'card' | 'credit'>('cash')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<SaleBill | null>(null)
+  const [rxF, setRxF] = useState({ patient: '', doctor: '', doctorReg: '', rxNo: '' })
 
   const products = useMemo<Product[]>(() => {
     const m = new Map<string, Product>()
@@ -38,7 +39,7 @@ export default function POS() {
       const price = lst.data?.find(l => l.medicine_id === med.id)?.unit_price ?? med.mrp
       const cur = m.get(med.id)
       if (cur) { cur.available += free; if (b.expiry_date < cur.nearest) cur.nearest = b.expiry_date }
-      else m.set(med.id, { medicine_id: med.id, name: med.name, strength: med.strength, pack_size: med.pack_size, barcode: med.barcode, mrp: med.mrp, price: Number(price), available: free, nearest: b.expiry_date, rx: med.requires_rx })
+      else m.set(med.id, { medicine_id: med.id, name: med.name, strength: med.strength, pack_size: med.pack_size, barcode: med.barcode, mrp: med.mrp, price: Number(price), available: free, nearest: b.expiry_date, rx: med.requires_rx, schedule: med.drug_schedule })
     }
     return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [inv.data, lst.data])
@@ -47,6 +48,8 @@ export default function POS() {
   const lines = products.filter(p => cart[p.medicine_id] > 0)
   const subtotal = lines.reduce((s, p) => s + p.price * cart[p.medicine_id], 0)
   const total = Math.max(0, subtotal - discount)
+  const needsRx = lines.some(p => p.schedule === 'H' || p.schedule === 'H1')
+  const hasH1 = lines.some(p => p.schedule === 'H1')
   const known = customers.data?.find(c => c.phone === phone.trim())
 
   const setQty = (p: Product, n: number) => setCart(c => ({ ...c, [p.medicine_id]: Math.min(p.available, Math.max(0, n)) }))
@@ -61,9 +64,9 @@ export default function POS() {
   async function charge() {
     setBusy(true)
     try {
-      const id = await api.createBill(lines.map(p => ({ medicine_id: p.medicine_id, quantity: cart[p.medicine_id], unit_price: p.price })), name, phone, discount, mode)
+      const id = await api.createBill(lines.map(p => ({ medicine_id: p.medicine_id, quantity: cart[p.medicine_id], unit_price: p.price })), name, phone, discount, mode, needsRx ? { ...rxF, patient: rxF.patient || name } : {})
       const bill = await api.bill(id)
-      setDone(bill); setCart({}); setName(''); setPhone(''); setDiscount(0)
+      setDone(bill); setCart({}); setName(''); setPhone(''); setDiscount(0); setRxF({ patient: '', doctor: '', doctorReg: '', rxNo: '' })
       inv.reload(); customers.reload()
       toast.ok(`Bill ${bill.bill_no} created`)
     } catch (x) { toast.err(errMsg(x)) } finally { setBusy(false) }
@@ -88,7 +91,7 @@ export default function POS() {
                     <b>{p.name}</b>
                     <span className="muted small">{p.strength} · {p.pack_size}</span>
                     <div className="row between"><span className="price">{money(p.price)}</span><span className="muted small">{num(p.available)} left</span></div>
-                    <div className="row gap wrap">{p.rx && <Badge tone="info">Rx</Badge>}{short && <Badge tone="warn">exp {fmtDate(p.nearest)}</Badge>}{n > 0 && <Badge tone="good">× {n}</Badge>}</div>
+                    <div className="row gap wrap">{p.schedule !== 'OTC' && <Badge tone={p.schedule === 'H1' ? 'warn' : 'info'}>{p.schedule}</Badge>}{short && <Badge tone="warn">exp {fmtDate(p.nearest)}</Badge>}{n > 0 && <Badge tone="good">× {n}</Badge>}</div>
                   </button>)
               })}
               {shown.length === 0 && <div className="muted"><Search size={16} /> No match</div>}
@@ -109,7 +112,17 @@ export default function POS() {
                 <b>{money(p.price * cart[p.medicine_id])}</b>
                 <button className="icon-btn" onClick={() => setQty(p, 0)} aria-label="Remove"><Trash2 size={15} /></button>
               </li>))}</ul>
-            {lines.some(p => p.rx) && <Alert tone="info">Contains prescription-only items — check the prescription.</Alert>}
+            {needsRx && (
+              <div className="rx-box">
+                <b>{hasH1 ? 'Schedule H1 — recorded in the H1 register' : 'Prescription required (Schedule H)'}</b>
+                <div className="grid2 tight" style={{ width: '100%' }}>
+                  <input placeholder={hasH1 ? 'Patient name *' : 'Patient name'} value={rxF.patient} onChange={e => setRxF({ ...rxF, patient: e.target.value })} />
+                  <input placeholder="Doctor name *" value={rxF.doctor} onChange={e => setRxF({ ...rxF, doctor: e.target.value })} />
+                  <input placeholder="Doctor reg. no." value={rxF.doctorReg} onChange={e => setRxF({ ...rxF, doctorReg: e.target.value })} />
+                  <input placeholder="Prescription no." value={rxF.rxNo} onChange={e => setRxF({ ...rxF, rxNo: e.target.value })} />
+                </div>
+              </div>
+            )}
             <div className="grid2 tight">
               <div className="search-box"><UserRound size={16} /><input value={name} onChange={e => setName(e.target.value)} placeholder="Customer name" /></div>
               <div className="search-box"><input list="cust" value={phone} onChange={e => { setPhone(e.target.value); const c = customers.data?.find(x => x.phone === e.target.value.trim()); if (c && !name) setName(c.name) }} placeholder="Phone" />
@@ -125,7 +138,7 @@ export default function POS() {
               {discount > 0 && <div className="row between muted"><span>Discount</span><span>− {money(discount)}</span></div>}
               <div className="row between total"><span>Total</span><b>{money(total)}</b></div>
             </div>
-            <button className="btn primary block lg" disabled={busy || lines.length === 0} onClick={charge}>{busy ? 'Processing…' : `Charge ${money(total)}`}</button>
+            <button className="btn primary block lg" disabled={busy || lines.length === 0 || (needsRx && !rxF.doctor.trim())} onClick={charge}>{busy ? 'Processing…' : `Charge ${money(total)}`}</button>
           </aside>
         </div>
       )}

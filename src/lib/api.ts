@@ -2,8 +2,8 @@ import { supabase } from './supabase'
 import type {
   AccountBalance, AdminOverview, Alternative, AppNotification, AuditRow, AvailabilityRow, Batch, CatalogItem,
   DashboardAnalytics, DashboardStats, Distribution, InventoryRow, Invoice, Listing, Medicine, Movement, Order,
-  OrderBundle, OrderEvent, OrderMessage, Payment, PharmacyProfile, Profile, ReorderSuggestion, RetailCustomer,
-  ReturnRow, Review, SaleBill, Shipment, Supplier, TradeRelation, VerifyResult,
+  MyContext, OrderBundle, OrderEvent, OrderMessage, OrgInvite, Payment, PharmacyProfile, Profile, ReorderSuggestion, RetailCustomer,
+  H1Entry, ReportRow, ReturnRow, Review, SaleBill, Shipment, Supplier, TeamMember, TradeRelation, VerifyResult, InviteInfo,
 } from './types'
 
 // Unwraps { data, error } and throws so callers can use try/catch
@@ -19,8 +19,32 @@ export const api = {
   async profile(id: string) {
     return ok(await supabase.from('profiles').select('*').eq('id', id).single()) as Profile
   },
-  async updateProfile(id: string, patch: Partial<Pick<Profile, 'full_name' | 'org_name' | 'phone' | 'address' | 'city' | 'license_no' | 'lat' | 'lng' | 'about' | 'gstin'>>) {
+  async updateProfile(id: string, patch: Partial<Pick<Profile, 'full_name' | 'org_name' | 'phone' | 'address' | 'city' | 'license_no' | 'lat' | 'lng' | 'about' | 'gstin' | 'state' | 'state_code' | 'accepted_terms_at'>>) {
     ok(await supabase.from('profiles').update(patch).eq('id', id))
+  },
+
+  async context() {
+    return ok(await supabase.rpc('my_context')) as MyContext
+  },
+
+  // ---- team
+  async team() {
+    return ok(await supabase.rpc('list_team')) as TeamMember[]
+  },
+  async invites() {
+    return ok(await supabase.from('org_invites').select('*').is('used_by', null).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false })) as OrgInvite[]
+  },
+  async createInvite(role: string, email: string) {
+    return ok(await supabase.rpc('create_invite', { p_role: role, p_email: email })) as string
+  },
+  async revokeInvite(code: string) {
+    ok(await supabase.rpc('revoke_invite', { p_code: code }))
+  },
+  async setMember(userId: string, role: string, active: boolean) {
+    ok(await supabase.rpc('set_member', { p_user: userId, p_role: role, p_active: active }))
+  },
+  async checkInvite(code: string) {
+    return ok(await supabase.rpc('check_invite', { p_code: code })) as InviteInfo | null
   },
 
   // ---- medicines & batches (manufacturer)
@@ -181,14 +205,22 @@ export const api = {
   },
   async buyerDirectory(sellerRole: 'manufacturer' | 'distributor') {
     const roles = sellerRole === 'manufacturer' ? ['distributor', 'retailer'] : ['retailer']
-    return ok(await supabase.from('profiles').select('*').in('role', roles).eq('status', 'active').order('org_name')) as Profile[]
+    return ok(await supabase.from('profiles').select('*').in('role', roles).eq('status', 'active').is('org_id', null).order('org_name')) as Profile[]
   },
 
   // ---- POS
-  async createBill(lines: { medicine_id: string; quantity: number; unit_price?: number }[], name: string, phone: string, discount: number, mode: string) {
-    return ok(await supabase.rpc('create_bill', {
+  async createBill(
+    lines: { medicine_id: string; quantity: number; unit_price?: number }[], name: string, phone: string, discount: number, mode: string,
+    rx: { patient?: string; doctor?: string; doctorReg?: string; rxNo?: string } = {},
+  ) {
+    return ok(await supabase.rpc('create_bill_ex', {
       p_lines: lines, p_customer_name: name, p_customer_phone: phone, p_discount: discount, p_payment_mode: mode,
+      p_patient: rx.patient ?? '', p_doctor: rx.doctor ?? '', p_doctor_reg: rx.doctorReg ?? '', p_rx_no: rx.rxNo ?? '',
     })) as string
+  },
+  async h1Register() {
+    return ok(await supabase.from('h1_register')
+      .select('*, medicines(name, strength), batches(batch_no), sale_bills(bill_no)').order('sold_at', { ascending: false }).limit(1000)) as unknown as H1Entry[]
   },
   async bills(limit = 300) {
     return ok(await supabase.from('sale_bills')
@@ -262,6 +294,12 @@ export const api = {
   },
   async deleteNotification(id: string) {
     ok(await supabase.from('notifications').delete().eq('id', id))
+  },
+
+  // ---- reports
+  async report(name: string, args: Record<string, string | undefined> = {}) {
+    const clean = Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined))
+    return ok(await supabase.rpc(name, clean)) as ReportRow[]
   },
 
   // ---- admin

@@ -23,8 +23,8 @@ function state(r: InventoryRow): { label: string; tone: 'bad' | 'warn' | 'info' 
 }
 
 export default function Inventory() {
-  const { session } = useAuth()
-  const uid = session!.user.id
+  const { profile } = useAuth()
+  const uid = profile!.id
   const toast = useToast()
   const inv = useAsync(() => api.inventory(uid), [uid])
   const lst = useAsync(() => api.listings(uid), [uid])

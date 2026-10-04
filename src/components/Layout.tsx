@@ -7,10 +7,11 @@ import { useTheme } from '../lib/theme'
 import { Avatar } from './ui'
 import { NAV } from './nav'
 import CommandPalette from './CommandPalette'
+import TermsGate from './TermsGate'
 import NotificationBell from './NotificationBell'
 
 export default function Layout() {
-  const { profile, signOut } = useAuth()
+  const { profile, userProfile, isStaff, memberRole, can, signOut } = useAuth()
   const nav = useNavigate()
   const loc = useLocation()
   const { theme, set } = useTheme()
@@ -39,9 +40,9 @@ export default function Layout() {
   const sections = useMemo(() => {
     if (!profile) return []
     const m = new Map<string, typeof NAV.admin>()
-    for (const i of NAV[profile.role]) m.set(i.section, [...(m.get(i.section) ?? []), i])
+    for (const i of NAV[profile.role].filter(n => !n.perm || can(n.perm))) m.set(i.section, [...(m.get(i.section) ?? []), i])
     return [...m.entries()]
-  }, [profile])
+  }, [profile, can])
 
   if (!profile) return null
   const name = profile.org_name || profile.full_name || 'Account'
@@ -68,7 +69,7 @@ export default function Layout() {
           <Avatar name={name} />
           <div className="who">
             <strong>{name}</strong>
-            <small>{roleLabel[profile.role]}{profile.verified && ' · verified'}</small>
+            <small>{isStaff ? `${memberRole} · ${userProfile?.full_name ?? ''}` : roleLabel[profile.role]}{profile.verified && !isStaff && ' · verified'}</small>
           </div>
         </div>
       </aside>
@@ -99,6 +100,7 @@ export default function Layout() {
         <main className="content"><Outlet /></main>
       </div>
       {palette && <CommandPalette onClose={() => setPalette(false)} />}
+      <TermsGate />
     </div>
   )
 }

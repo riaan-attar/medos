@@ -14,6 +14,7 @@ export default function ReceiptDoc({ bill, shop }: { bill: SaleBill; shop: Profi
       <hr />
       <div className="row between small"><span>{bill.bill_no}</span><span>{fmtDateTime(bill.created_at)}</span></div>
       {(bill.customer_name || bill.customer_phone) && <div className="small">Customer: {bill.customer_name} {bill.customer_phone}</div>}
+      {bill.doctor_name && <div className="small">Rx: Dr. {bill.doctor_name}{bill.doctor_reg_no && ` (${bill.doctor_reg_no})`}{bill.patient_name && ` · Patient: ${bill.patient_name}`}</div>}
       <table className="doc-table">
         <thead><tr><th>Item</th><th className="r">Qty</th><th className="r">Rate</th><th className="r">Amt</th></tr></thead>
         <tbody>{lines.map(l => (

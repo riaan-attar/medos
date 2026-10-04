@@ -9,9 +9,9 @@ import DataTable, { type Column } from '../components/DataTable'
 import type { Order } from '../lib/types'
 
 export default function Orders() {
-  const { session, profile } = useAuth()
+  const { profile } = useAuth()
   const nav = useNavigate()
-  const uid = session!.user.id
+  const uid = profile!.id
   const role = profile!.role
   const { data, error, loading, reload } = useAsync(() => api.orders(uid), [uid])
   const canSell = role === 'manufacturer' || role === 'distributor' || role === 'retailer'

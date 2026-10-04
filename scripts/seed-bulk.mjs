@@ -295,7 +295,7 @@ for (const r of RETS) {
     try {
       const cust = chance(0.7) ? pick(CUST) : { name: '', phone: '' }
       const lines = shuffle(meds).slice(0, int(1, 4)).map(medicine_id => ({ medicine_id, quantity: int(1, 5) }))
-      const billId = await rpc(r, 'create_bill', { p_lines: lines, p_customer_name: cust.name, p_customer_phone: cust.phone, p_discount: chance(0.2) ? int(2, 20) : 0, p_payment_mode: pick(['cash', 'cash', 'upi', 'upi', 'card', 'credit']) })
+      const billId = await rpc(r, 'create_bill_ex', { p_lines: lines, p_customer_name: cust.name, p_customer_phone: cust.phone, p_discount: chance(0.2) ? int(2, 20) : 0, p_payment_mode: pick(['cash', 'cash', 'upi', 'upi', 'card', 'credit']) })
       bills++
       const when = Date.now() - int(0, 44) * DAY - int(0, 600) * 60000 + 9 * 3600000
       const t = iso(Math.min(when, Date.now() - 30000))

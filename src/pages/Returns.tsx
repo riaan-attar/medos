@@ -8,8 +8,8 @@ import DataTable, { type Column } from '../components/DataTable'
 import type { ReturnRow } from '../lib/types'
 
 export default function Returns() {
-  const { session } = useAuth()
-  const uid = session!.user.id
+  const { profile } = useAuth()
+  const uid = profile!.id
   const nav = useNavigate()
   const { data, error, loading, reload } = useAsync(() => api.returns(), [])
   const cols: Column<ReturnRow>[] = [
